@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace WeatherApi.Models.OpenWeatherMap;
 
@@ -26,8 +27,12 @@ internal sealed class OwmCity
 {
     public string Name { get; set; } = null!;
 }
-internal sealed class OwmMain { public double Temp { get; set; }
+internal sealed class OwmMain
+{
+    public double Temp { get; set; }
+    [JsonPropertyName("temp_min")]
     public double TempMin { get; set; }
+    [JsonPropertyName("temp_max")]
     public double TempMax { get; set; }
 }
 
