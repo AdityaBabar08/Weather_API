@@ -74,7 +74,7 @@ static IResult UpstreamError(HttpRequestException ex, string city) =>
     ex.StatusCode switch
     {
         HttpStatusCode.Unauthorized => Results.Problem(
-            "Invalid API key configured.", statusCode: StatusCodes.Status500InternalServerError),
+            "Invalid API key configured.", statusCode: StatusCodes.Status401Unauthorized),
         HttpStatusCode.NotFound => Results.Problem(
             $"City '{city}' was not found.", statusCode: StatusCodes.Status404NotFound),
         _ => Results.Problem(
