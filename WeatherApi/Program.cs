@@ -5,6 +5,9 @@ using WeatherApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var port = Environment.GetEnvironmentVariable("PORT"); if (!string.IsNullOrEmpty(port))
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
 builder.Services.Configure<OpenWeatherOptions>(
     builder.Configuration.GetSection(OpenWeatherOptions.SectionName));
 builder.Services.Configure<CacheOptions>(
@@ -23,7 +26,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
-app.UseHttpsRedirection();
+if (string.IsNullOrEmpty(port)) app.UseHttpsRedirection();
 
 app.MapGet("/weather/current", async (string? city, WeatherService weather, CancellationToken ct) =>
 {
