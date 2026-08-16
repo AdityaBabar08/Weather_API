@@ -7,7 +7,8 @@ using WeatherApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var port = Environment.GetEnvironmentVariable("PORT"); if (!string.IsNullOrEmpty(port))
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(port))
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 builder.Services.Configure<OpenWeatherOptions>(
@@ -56,7 +57,7 @@ app.MapGet("/weather/current", async (string? city, WeatherService weather, Canc
     {
         return UpstreamError(ex, city);
     }
-}).WithName("GetCurrentWeather").RequireRateLimiting("weather"); ;
+}).WithName("GetCurrentWeather").RequireRateLimiting("weather");
 
 app.MapGet("/weather/forecast", async (string? city, int? days, WeatherService weather, CancellationToken ct) =>
 {
