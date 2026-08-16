@@ -1,6 +1,7 @@
 using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.Extensions.Caching.Distributed;
+using Scalar.AspNetCore;
 using WeatherApi.Configuration;
 using WeatherApi.Services;
 
@@ -36,8 +37,8 @@ builder.Services.AddRateLimiter(options =>
 });
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-    app.MapOpenApi();
+app.MapOpenApi();
+app.MapScalarApiReference();
 
 if (string.IsNullOrEmpty(port)) app.UseHttpsRedirection();
 app.UseRateLimiter();
