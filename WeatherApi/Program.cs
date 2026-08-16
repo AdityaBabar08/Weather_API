@@ -1,4 +1,5 @@
 using System.Net;
+using System.Threading.RateLimiting;
 using Microsoft.Extensions.Caching.Distributed;
 using WeatherApi.Configuration;
 using WeatherApi.Services;
@@ -21,12 +22,25 @@ builder.Services.AddHttpClient<WeatherService>(client =>
 
 builder.Services.AddOpenApi();
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("weather", context =>
+        RateLimitPartition.GetFixedWindowLimiter(ClientKey(context), _ =>
+            new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
 if (string.IsNullOrEmpty(port)) app.UseHttpsRedirection();
+app.UseRateLimiter();
 
 app.MapGet("/weather/current", async (string? city, WeatherService weather, CancellationToken ct) =>
 {
@@ -41,7 +55,7 @@ app.MapGet("/weather/current", async (string? city, WeatherService weather, Canc
     {
         return UpstreamError(ex, city);
     }
-}).WithName("GetCurrentWeather");
+}).WithName("GetCurrentWeather").RequireRateLimiting("weather"); ;
 
 app.MapGet("/weather/forecast", async (string? city, int? days, WeatherService weather, CancellationToken ct) =>
 {
@@ -58,7 +72,7 @@ app.MapGet("/weather/forecast", async (string? city, int? days, WeatherService w
     {
         return UpstreamError(ex, city);
     }
-}).WithName("GetForecast");
+}).WithName("GetForecast").RequireRateLimiting("weather");
 
 app.MapGet("/health", async (IDistributedCache cache) =>
 {
@@ -84,4 +98,10 @@ static IResult UpstreamError(HttpRequestException ex, string city) =>
             "Weather service is unavailable.", statusCode: StatusCodes.Status502BadGateway)
     };
 
+static string ClientKey(HttpContext context)
+{
+    var forwarded = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+    if (!string.IsNullOrEmpty(forwarded)) return forwarded.Split(',')[0].Trim();
+    return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+}
 app.Run();
