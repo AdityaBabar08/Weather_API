@@ -1,10 +1,29 @@
 # Weather API
 
+[![CI](https://github.com/AdityaBabar08/Weather_API/actions/workflows/dotnet.yml/badge.svg)](https://github.com/AdityaBabar08/Weather_API/actions/workflows/dotnet.yml)
+
 ## Purpose
 
 The Weather API is a web API for ASP.NET Core. It gets current weather data and
 weather forecasts from OpenWeatherMap. It stores the responses in a Redis cache.
 It sends the responses to clients as JSON.
+
+The free OpenWeatherMap tier has no daily forecast endpoint. The API combines
+the 5-day forecast in 3-hour steps into daily minimum and maximum temperatures.
+It calculates this in C#.
+
+## Live demo
+
+The API is deployed on Railway:
+
+`https://weatherapi-production-8fb1.up.railway.app`
+
+You can test the endpoints in the browser with the Scalar UI:
+
+`https://weatherapi-production-8fb1.up.railway.app/scalar/v1`
+
+The free Railway plan sleeps the service after 10 minutes without traffic.
+The first request after a sleep takes a few seconds to wake the service.
 
 The API has three endpoints:
 
@@ -23,7 +42,24 @@ The API has three endpoints:
 | Weather data source | OpenWeatherMap                              |
 | Cache               | Redis                                       |
 | Cache client        | `IDistributedCache` (StackExchange.Redis)   |
+| API UI              | Scalar (OpenAPI)                            |
+| Rate limiting       | ASP.NET Core built-in (`AddRateLimiter`)    |
+| Deploy              | Docker + Railway                            |
+| CI                  | GitHub Actions                              |
 | Test framework      | xUnit                                       |
+
+## Architecture
+
+```mermaid
+graph LR
+    A[Client] --> B[API on Railway]
+    B --> C[Redis cache]
+    B --> D[OpenWeatherMap]
+    B --> E[Scalar UI]
+```
+
+The API runs in a Docker container on Railway. Railway runs the Redis database
+as a separate managed service. The API connects to it over the private network.
 
 ## Prerequisites
 
@@ -145,10 +181,14 @@ directly. The `/health` endpoint reports the status of Redis:
   month.
 - The API uses metric units. OpenWeatherMap returns temperatures in Kelvin
   when the units parameter is not set. The API sets `units=metric`.
-- The forecast endpoint returns daily data. The free OpenWeatherMap tier has
-  no daily forecast endpoint. The API gets the 5-day forecast in 3-hour steps.
-  It combines the 3-hour entries by day. It calculates the minimum and the
-  maximum temperature for each day.
+- The forecast endpoint returns daily data. The API gets the 5-day forecast in
+  3-hour steps. It combines the 3-hour entries by day. It calculates the
+  minimum and the maximum temperature for each day.
+- The API limits requests to 20 per minute per client. This protects the free
+  OpenWeatherMap quota. A client that exceeds the limit gets a `429` response.
+  The limit does not apply to `/health`.
+- The API exposes OpenAPI in all environments. The Scalar UI at `/scalar/v1`
+  lets a reviewer test the endpoints in the browser.
 - The API responses do not contain the OpenWeatherMap response structure. The
   API maps the upstream data to its own DTOs. The API surface is independent
   of upstream changes.
@@ -163,10 +203,11 @@ directly. The `/health` endpoint reports the status of Redis:
 | OpenWeatherMap does not know the city | 404 |
 | The API key is invalid             | 401 |
 | OpenWeatherMap is not available    | 502 |
+| The client exceeds the rate limit  | 429 |
 
 ## Configuration
 
-The `appsettings.json` file has these sections:
+The local `appsettings.json` file has these sections:
 
 | Section                        | Purpose                                 |
 |--------------------------------|-----------------------------------------|
@@ -176,6 +217,29 @@ The `appsettings.json` file has these sections:
 | `Redis:ConnectionString`       | The address of the Redis server         |
 | `Weather:CacheTtlMinutes`      | The TTL of the cache in minutes         |
 
+## Deploy on Railway
+
+The repository has a `Dockerfile` and a `railway.toml` at the root. Railway
+builds the Docker image from the GitHub repository.
+
+Set these variables on the Railway API service:
+
+| Variable                    | Value                            |
+|-----------------------------|----------------------------------|
+| `Redis__ConnectionString`   | `${{Redis.REDIS_URL}}`           |
+| `OpenWeather__ApiKey`       | Your API key                     |
+
+Railway makes the `REDIS_URL` variable available on the Redis database
+service. The reference `${{Redis.REDIS_URL}}` connects the API to Redis over
+the private network. The API key is a secret. It exists only in the Railway
+dashboard. It is never stored in the repository.
+
+The free Railway plan has these limits:
+
+- The service sleeps after 10 minutes without traffic.
+- The monthly usage must stay under $1.
+- Deploys are blocked during peak hours (8 AM to 8 PM local time).
+
 ## Tests
 
 Run this command in the repository root:
@@ -184,7 +248,8 @@ Run this command in the repository root:
 dotnet test
 ```
 
-The tests cover these behaviors:
+GitHub Actions runs the same command on every push to `master`. The tests
+cover these behaviors:
 
 - Cache miss: the service calls OpenWeatherMap and stores the response.
 - Cache hit: the service returns the cached data. It does not call
